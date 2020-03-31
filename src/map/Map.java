@@ -1,4 +1,5 @@
 package map;
+
 import main.Batch;
 
 import java.awt.*;
@@ -10,71 +11,61 @@ import static map.Tree.GENS;
 
 public class Map {
     public Cell[][] map;
-    public List<Cell> cells;
+    public List<Cell> free_cells;
     public List<Tree> trees;
     public List<Tree> freeTrees;
     public List<Cell> seeds;
     public Queue<Cell> changes;
-    public Map(int x, int y){
+    public long cycle = 0;
+    public boolean drawNet = true;
+    public int startX;
+    private int selectedX;
+    private int selectedY;
+    public Map(int x, int y, int startX) {
         map = new Cell[x][y];
-        cells = new ArrayList<>();
+        free_cells = new ArrayList<>();
         trees = new ArrayList<>();
         changes = new LinkedList<>();
         seeds = new ArrayList<>();
         freeTrees = new ArrayList<>();
-        Tree tree = new Tree();
-        tree.c = Color.BLUE;
-        tree.genom = new int[][]{{1,30,30,30},{30,2,30,3},{4,30,30,30},{9,30,30,30},
-                {5,30,30,30},{30,6,30,30},{30,7,30,30},{4,30,8,30},
-                {30,30,8,30},{30,30,30,30},{30,30,30,30},{30,30,30,30},
-                {30,30,30,30},{30,30,30,30},{30,30,30,30},{30,30,30,30}};
-//        for(int i = 0; i < tree.genom.length; ++i){
-//            for(int j = 0; j < tree.genom[0].length; ++j){
-//                tree.genom[i][j] = (int)(Math.random() * tree.genom.length * 2);
-//            }
-//        }
-        Cell cell = initCell(0, x / 2, y / 2, tree);
-        cell.type = SEED;
-        map[cell.x][cell.y] = cell;
-        tree.energy = 300;
-        tree.cells.add(cell);
-        seeds.add(cell);
-        trees.add(tree);
+        trees.add(new Tree());
+        this.startX = startX;
     }
-    public void update(){
-        for(int i = seeds.size() - 1; i >= 0; --i){
+
+    public synchronized void updatePainting() {
+        update();
+    }
+
+    public void update() {
+        ++cycle;
+        for (int i = seeds.size() - 1; i >= 0; --i) {
             Cell c = seeds.get(i);
-            if(c.y == 0){
-                seeds.remove(i);
-                c.type = OTR;
+            if (c.y == 0) {//семя достигло земли
+                seeds.remove(i); // семя существует только в падении
+                c.type = OTR; // оно теперь отросток в новом дереве
                 c.tree.otrs.add(c);
-//                c.tree.energy = 300;
-//                c.energy = 0;
-                c.tree.age = 0;
-            }else if(map[c.x][c.y - 1] == null) {
+                c.tree.age = 0;//молодом дереве
+                c.tree.isSeed = false; // но уже не семени
+            } else if (map[c.x][c.y - 1] == null) {//под семенем свободно и оно может падать
                 map[c.x][c.y--] = null;
                 map[c.x][c.y] = c;
-            }else{
-                map[c.x][c.y] = null;
-                seeds.remove(i);
-                c.tree.otrs.clear();
-                c.tree.cells.clear();
-                trees.remove(c.tree);
-                freeTrees.add(c.tree);
-                cells.add(c);
+            } else {//если семя упало на что-то, кроме земли
+                disposeTree(c.tree);// разобрать дерево
             }
         }
-        for (Cell[] value : map) {
-            int n = 3;
+
+        for (int i = 0; i < map.length; ++i) {
+            Cell[] value = map[i];
+            int n = 3;//свет проходит 3 слоя
             for (int j = value.length - 1; j >= 0; --j) {
-                if (value[j] != null) {
-                    value[j].earnEnergy((n--) * (j + 6));
+                if (value[j] != null && value[j].type != SEED) {//семя пропускает свет и не получает энергии
+                    value[j].earnEnergy((n--) * (j + 6));//
                     if (n == 0)
                         break;
                 }
             }
         }
-        for (Tree tree : trees) {
+        for (Tree tree : trees) {// растем вверх
             for (int j = 0; j < tree.otrs.size(); ++j) {
                 Cell c = tree.otrs.get(j);
                 if (c.energy >= Cell.energyForGrow) {
@@ -88,7 +79,7 @@ public class Map {
                 }
             }
         }
-        for (Tree tree : trees) {
+        for (Tree tree : trees) {// растем вправо
             for (int j = 0; j < tree.otrs.size(); ++j) {
                 Cell c = tree.otrs.get(j);
                 if (c.energy >= Cell.energyForGrow) {
@@ -102,7 +93,7 @@ public class Map {
                 }
             }
         }
-        for (Tree tree : trees) {
+        for (Tree tree : trees) {// растем влево
             for (int j = 0; j < tree.otrs.size(); ++j) {
                 Cell c = tree.otrs.get(j);
                 if (c.energy >= Cell.energyForGrow) {
@@ -116,7 +107,7 @@ public class Map {
                 }
             }
         }
-        for (Tree tree : trees) {
+        for (Tree tree : trees) {// растем вниз
             for (int j = 0; j < tree.otrs.size(); ++j) {
                 Cell c = tree.otrs.get(j);
                 if (c.energy >= Cell.energyForGrow) {
@@ -130,130 +121,214 @@ public class Map {
                 }
             }
         }
-        while (!changes.isEmpty()){
+        while (!changes.isEmpty()) {
             Cell c = changes.poll();
-            if(map[c.x][c.y] == null) {
+            if (map[c.x][c.y] == null) {
                 map[c.x][c.y] = c;
                 c.tree.otrs.add(c);
                 c.tree.cells.add(c);
-            }else{
-                cells.add(c);
+            } else {
+                free_cells.add(c);
                 c.tree.energy += energyForGrow;
             }
         }
+
         for (int i = trees.size() - 1; i >= 0; --i) {
             Tree tree = trees.get(i);
             for (int j = tree.otrs.size() - 1; j >= 0; --j) {
-                if (tree.otrs.get(j).type == WOOD)
+                if (tree.otrs.get(j).type == WOOD) {
                     tree.otrs.remove(j);
+                }
             }
-            tree.energy -= tree.cells.size() * Cell.energyForLive;
+            if (!tree.isSeed)//семена не тратят энергии
+                tree.energy -= tree.cells.size() * Cell.energyForLive;
             ++tree.age;
-            if(tree.age > 100 || tree.energy < 0){
-                tree.cells.removeAll(tree.otrs);
-                for(Cell c: tree.cells){
-                    cells.add(c);
-                    map[c.x][c.y] = null;
-                }
-                tree.cells.clear();
-                List<Cell> seeds = tree.otrs;
-                this.seeds.addAll(seeds);
-                if(seeds.size() != 0)
-                for(Cell c: seeds){
-                    c.type = SEED;
-                    c.energy = tree.energy / seeds.size();
-                    initTree(tree.genom, c);
-                }
-                seeds.clear();
-                freeTrees.add(trees.remove(i));
+            if (tree.age > 100 || tree.energy < 0) {
+                disposeTree(tree);
             }
         }
     }
-    private Cell initCell(int genomID, int x, int y, Tree tree){
-        if(cells.size() == 0) {
-            cells.add(new Cell());
+
+    private Cell initCell(int genomID, int x, int y, Tree tree) {
+        if (free_cells.size() == 0) {
+            free_cells.add(new Cell());
         }
-//        while (cells.get(cells.size() - 1) == null){
-//            cells.remove(cells.size() - 1);
-//            if(cells.size() == 0) {
-//                cells.add(new Cell());
-//            }
-//        }
-        Cell c = cells.remove(cells.size() - 1);
+        Cell c = free_cells.remove(free_cells.size() - 1); // нашли ненужню клетку
         c.x = x;
         c.y = y;
         c.energy = 0;
         c.genomID = genomID;
         c.tree = tree;
-        c.type = OTR;
+        c.type = OTR;// вырос бы отросток
         return c;
     }
-    public void initTree(int[][] genom, Cell seed){
-        if(freeTrees.size() == 0)
+
+    public void initTree(int[][] genom, Cell seed) {
+        if (freeTrees.size() == 0)
             freeTrees.add(new Tree());
-        Tree tree = freeTrees.remove(freeTrees.size() - 1);
-        tree.c = Color.BLUE;
-        seed.genomID = 0;
-        tree.cells.clear();
-        tree.otrs.clear();
-        tree.energy = seed.energy;
-        seed.energy = 0;
-        tree.age = 0;
-        for(int i = 0; i < genom.length; ++i){
+        Tree tree = freeTrees.remove(freeTrees.size() - 1);// нашли объект дерева
+        seed.genomID = 0; //ген семя всегда 0
+        tree.energy = seed.energy; // передадим дереву всю энергию семя
+        seed.energy = 0; // в семени не осталось энергии
+        tree.age = 0; // возраст семя
+        for (int i = 0; i < genom.length; ++i) {
             System.arraycopy(genom[i], 0, tree.genom[i], 0, genom[0].length);
-        }
-        seed.energy = 0;
-        if(Math.random() < 0.25) {
+        } // скопироваль все гены старого дерева
+        if (Math.random() < 0.25) {
             int genomID = (int) (Math.random() * genom.length);
             int genID = (int) (Math.random() * genom[0].length);
             int gen = (int) (Math.random() * genom.length * 2);
             tree.genom[genomID][genID] = gen;
+            tree.c = new Color(Color.HSBtoRGB((float) Math.random(), 1, 1)); // установим случайный цвет
+            // изменили один ген
+        } else {
+            tree.c = seed.tree.c;
         }
-        tree.cells.add(seed);
-        seed.tree = tree;
-        trees.add(tree);
+        tree.cells.add(seed); // семя принадлежит дереву
+        seed.tree = tree; // связываем
+        tree.isSeed = true; // дерево пока еще семя
+        trees.add(tree); // теперь дерево существует
     }
-    private int mod(int a, int b){
+
+    public void disposeTree(Tree tree) {
+        tree.cells.removeAll(tree.otrs);//cells - теперь только древесина и семена
+        for (Cell c : tree.cells) {
+            if (map[c.x][c.y] != c) {
+                System.out.println("Problem with dispose cells");
+            }
+            map[c.x][c.y] = null; // опустошение карты от древесины и семян
+            if (c.type == SEED) {
+                if (!seeds.remove(c)) {
+                    System.out.println("Seed is not in seeds");
+                }
+            }
+            c.tree = null;
+        }
+        free_cells.addAll(tree.cells); // добавить ненужную древесину к ненужным клеткам
+        tree.cells.clear(); // работа с древесиной окончена
+        for (Cell c : tree.otrs) {
+            c.type = SEED; // каждый отросток теперь семечко
+            c.energy = Math.min(300, tree.energy / tree.otrs.size() + c.energy);// энергия семечка
+            if (c.energy > 0) {//если энергия есть
+                seeds.add(c); // добавим его в массив с семенами
+                initTree(tree.genom, c);
+            } else { //если нет, семя погибло
+                free_cells.add(c);
+                map[c.x][c.y] = null;
+            }
+        }
+        tree.otrs.clear();// работа с отростками закончена
+
+        if (!trees.remove(tree)) {
+            System.out.println("Tree is not in trees on dispose");
+        } // дерево больше не существует
+        freeTrees.add(tree);
+    }
+
+    private int mod(int a, int b) {
         int c = a % b;
-        if(c < 0)
+        if (c < 0)
             c += b;
         return c;
     }
-    public void render(int type, Batch batch){
-//        for(Tree tree: trees){
-//            for(Cell cell: tree.cells){
-//                cell.render(type, batch);
-//            }
-//        }
-        drawLines(batch);
-        for (Cell[] value : map) {
-            for (int j = value.length - 1; j >= 0; --j) {
-                if (value[j] != null) {
-                    value[j].render(type, batch);
-                }
+
+    public synchronized void render(int type, Batch batch) {
+        if (drawNet)
+            drawLines(batch);
+        for (Tree tree : trees) {
+            for (int j = 0; j < tree.cells.size(); ++j) {
+                tree.cells.get(j).render(type, batch, startX);
             }
         }
-        batch.drawString(0,-5,"" + trees.size());
-        if(map[x][y] != null){
-            batch.drawString(3,-5, Arrays.deepToString(map[x][y].tree.genom));
-        }
+    }
 
-    }
-    private void drawLines(Batch batch){
-        batch.setColor(Color.GRAY);
-        for(int i = 0; i < map.length+1; ++i){
-            batch.drawLine(i, 0, i, map[0].length);
+    private void drawLines(Batch batch) {
+        batch.setColor(Color.DARK_GRAY);
+        for (int i = 0; i < map.length + 1; ++i) {
+            batch.drawLine(i + startX, 0, i + startX, map[0].length);
         }
-        for(int i = 0; i < map[0].length + 1; ++i){
-            batch.drawLine(0, i, map.length, i);
+        for (int i = 0; i < map[0].length + 1; ++i) {
+            batch.drawLine(startX, i, map.length + startX, i);
         }
     }
-    public void clear(){
 
+    public void clear() {
+        clearMap();
+        int[][] genom = new int[16][4];
+        for (int[] ints : genom) {
+            Arrays.fill(ints, 30);
+        }
+        for (int i = 0; i < 5; ++i) {
+            for (int j = 0; j < genom.length / 2; ++j) {
+                for (int k = 0; k < genom[0].length; ++k) {
+                    genom[j][k] = (int) (Math.random() * genom.length * 2);
+                }
+            }
+            if (free_cells.size() == 0)
+                free_cells.add(new Cell());
+            Cell cell = free_cells.remove(free_cells.size() - 1);
+            cell.x = map.length * i / 5 + 5;
+            cell.y = 0;
+            cell.type = SEED;
+            Tree tree = freeTrees.remove(freeTrees.size() - 1);
+            cell.tree = tree;
+            cell.energy = 300;
+            cell.tree.c = new Color(Color.HSBtoRGB((float) Math.random(), 1, 1));
+            map[cell.x][cell.y] = cell;
+            seeds.add(cell);
+            initTree(genom, cell);
+            freeTrees.add(tree);
+        }
     }
-    int x; int y;
-    public void setSelected(int x, int y){
-        this.x = x;
-        this.y = y;
+
+    public void externalMakeSeed(int[][] genom) {
+        clearMap();
+        if (genom == null)
+            return;
+        if (free_cells.size() == 0)
+            free_cells.add(new Cell());
+        Cell cell = free_cells.remove(free_cells.size() - 1);
+        cell.x = map.length / 2;
+        cell.y = 0;
+        cell.type = SEED;
+        Tree tree = freeTrees.remove(freeTrees.size() - 1);
+        cell.tree = tree;
+        cell.energy = 300;
+        cell.tree.c = new Color(Color.HSBtoRGB((float) Math.random(), 1, 1));
+        map[cell.x][cell.y] = cell;
+        seeds.add(cell);
+        initTree(genom, cell);
+        freeTrees.add(tree);
+    }
+
+    public int[][] getGenom() {
+        if (map[selectedX][selectedY] != null)
+            return map[selectedX][selectedY].tree.genom;
+        else
+            return null;
+    }
+
+    private void clearMap() {
+        for (Tree tree : trees) {
+            for (int j = 0; j < tree.cells.size(); ++j) {
+                Cell c = tree.cells.get(j);
+                map[c.x][c.y] = null;
+                free_cells.add(c);
+            }
+            tree.cells.clear();
+            tree.otrs.clear();
+        }
+        cycle = 0;
+        seeds.clear();
+        freeTrees.addAll(trees);
+        trees.clear();
+    }
+
+    public void setSelected(int x, int y) {
+        if (x < 0 || x >= map.length || y < 0 || y >= map[0].length) {
+            return;
+        }
+        this.selectedX = x;
+        this.selectedY = y;
     }
 }

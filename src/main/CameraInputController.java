@@ -13,16 +13,14 @@ public class CameraInputController extends MouseAdapter {
     private float scale;
     private int px;
     private int py;
-    private int offsetX;
-    private int offsetY;
-    public CameraInputController(Runnable repaint, Runnable resize, int offsetX, int offsetY) {
+    private int HEIGHT;
+    public CameraInputController(Runnable repaint, Runnable resize, int height) {
+        this.HEIGHT = height;
         this.repaint = repaint;
         this.resize = resize;
-        this.x = 0;
-        this.y = -20;
-        this.scale = 5;
-        this.offsetX = offsetX;
-        this.offsetY = offsetY;
+        this.x = -25;
+        this.y = -50;
+        this.scale = 4.4f;
     }
 
     @Override
@@ -33,8 +31,8 @@ public class CameraInputController extends MouseAdapter {
 
     @Override
     public void mouseWheelMoved(MouseWheelEvent e) {
-        int sx = e.getX() - offsetX;
-        int sy = 720 - e.getY()+offsetY;
+        int sx = e.getX();
+        int sy = HEIGHT - e.getY();
         float deltaScale = 1.1f;
         float deltaX = sx / scale;
         float deltaY = sy / scale;
@@ -74,10 +72,10 @@ public class CameraInputController extends MouseAdapter {
     }
 
     public int getPx() {
-        return px - offsetX;
+        return px;
     }
 
     public int getPy() {
-        return py - offsetY;
+        return py;
     }
 }

@@ -9,6 +9,7 @@ public class Tree {
     public int energy;
     public Color c;
     public int age;
+    public boolean isSeed;
     public static final int GENS = 16;
     public Tree(){
         cells = new ArrayList<>();
