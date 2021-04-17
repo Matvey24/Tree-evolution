@@ -2,35 +2,35 @@ package main;
 
 import framesLib.Screen;
 import map.Map;
-import map.Tree;
 import threads.Tasks;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.util.Arrays;
 
 public class MainPanel extends Screen {
     public Map map;
-    public Map laboratory;
+    public Map lab;
     public Batch batch;
     public JToggleButton btn_timer;
     private int paint_type;
-    private int delay = 125;
-    private boolean running = true;
-    private Runnable update;
-    private Runnable lab_update;
+    private int delay;
+    private boolean running;
+    private final Runnable update;
+    private final Runnable lab_update;
     public int[][] lab_genom;
-
+    public Tasks map_tasks;
+    public Tasks lab_tasks;
     public MainPanel() {
         setLayout(null);
-        map = new Map(256, 100, 0);
-        map.clear();
-        lab_genom = new int[Tree.GENS][4];
-        laboratory = new Map(150, 100, -180);
-        Timer painter = new Timer(33, e -> repaint());
-        Tasks tasks = new Tasks(2);
+        Data.loadSettings();
+        map = new Map(Data.MAP_WIDTH, Data.MAP_HEIGHT, 0);
+        lab_genom = new int[Data.GENS][4];
+        lab = new Map(Data.LAB_WIDTH, Data.LAB_HEIGHT, -Data.LAB_WIDTH - 30);
+        Timer painter = new Timer(16, e -> repaint());
+        lab_tasks = new Tasks();
+        map_tasks = new Tasks();
         update = () -> {
             while (running) {
                 if (delay != 0) {
@@ -46,46 +46,42 @@ public class MainPanel extends Screen {
             }
         };
         lab_update = () -> {
-            while (running && laboratory.cycle < 100) {
+            while (running && lab.cycle < Data.MAX_AGE) {
                 if (delay != 0) {
-                    laboratory.updatePainting();
+                    lab.updatePainting();
                     try {
                         Thread.sleep(delay);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
                 } else {
-                    laboratory.update();
+                    lab.update();
                 }
             }
         };
-        tasks.runTask(update);
-        tasks.runTask(lab_update);
-        painter.start();
         batch = new Batch(this, 720);
         btn_timer = new JToggleButton("Timer");
         btn_timer.addActionListener((e) -> {
             if (btn_timer.isSelected()) {
                 running = true;
-                tasks.runTask(update);
-                tasks.runTask(lab_update);
+                map_tasks.runTask(update);
+                lab_tasks.runTask(lab_update);
             } else {
                 running = false;
             }
         });
         add(btn_timer);
         btn_timer.setBounds(5, 5, 100, 30);
-        btn_timer.setSelected(true);
         addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getModifiersEx() != 0)
+                if (e.getButton() != MouseEvent.BUTTON3)
                     return;
                 int x = (int) batch.getMX();
                 int y = (int) batch.getMY();
                 map.setSelected(x, y);
-                if (laboratory.cycle < 100) {
-                    laboratory.cycle = 100;
+                if (lab.cycle < Data.MAX_AGE) {
+                    lab.cycle = Data.MAX_AGE;
                     try {
                         Thread.sleep(100);
                     } catch (InterruptedException ex) {
@@ -93,17 +89,18 @@ public class MainPanel extends Screen {
                     }
                 }
                 int[][] gen = map.getGenom();
-                if(gen != null) {
+                if (gen != null) {
                     for (int i = 0; i < gen.length; ++i) {
                         System.arraycopy(gen[i], 0, lab_genom[i], 0, gen[i].length);
                     }
                 }
-                laboratory.externalMakeSeed(lab_genom);
-                tasks.runTask(lab_update);
+                lab.externalMakeSeed(lab_genom);
+                lab_tasks.runTask(lab_update);
             }
         });
         setBackground(Color.BLACK);
-        JSlider speed = new JSlider(0, 10, 3);
+        JSlider speed = new JSlider(0, 10, 5);
+        delay = 1000 / 32;
         speed.addChangeListener(e -> {
             int value = speed.getValue();
             float v = 1000 / (float) Math.pow(2, value);
@@ -123,15 +120,12 @@ public class MainPanel extends Screen {
                 repaint();
             } else {
                 running = false;
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException ex) {
-                    ex.printStackTrace();
-                }
-                map.clear();
-                running = true;
-                tasks.runTask(update);
-                tasks.runTask(lab_update);
+                map_tasks.runTask(()->{
+                    map.clear();
+                    running = true;
+                    map_tasks.runTask(update);
+                    lab_tasks.runTask(lab_update);
+                });
             }
         });
         add(btn_clear);
@@ -158,24 +152,36 @@ public class MainPanel extends Screen {
         add(btn_3);
 
         JToggleButton btn_net = new JToggleButton("Show net");
-        btn_net.setSelected(true);
         btn_net.setBounds(5, 295, 100, 30);
         btn_net.addActionListener((e) -> {
             map.drawNet = btn_net.isSelected();
-            laboratory.drawNet = btn_net.isSelected();
+            lab.drawNet = btn_net.isSelected();
         });
         add(btn_net);
-        JButton btn_lab = new JButton("Lab genom");
+        JButton btn_lab = new JButton("Save gen");
         btn_lab.setBounds(5, 330, 100, 30);
-        btn_lab.addActionListener((e) -> {
-
-        });
+        btn_lab.addActionListener(e -> Data.saveGenom(lab_genom));
         add(btn_lab);
+        int[][][] genom = Data.loadGenom();
+        if (genom == null) {
+//            map.clear();
+            map.loadMap();
+        } else {
+            map.clear(genom);
+        }
+        painter.start();
     }
 
     @Override
     public void onSetSize() {
-        setSize(1280, 720);
+        setSize(1280, 760);
+    }
+
+    @Override
+    public void onHide() {
+        running = false;
+        map_tasks.join();
+        map.saveMap();
     }
 
     private long lastCycle;
@@ -188,7 +194,7 @@ public class MainPanel extends Screen {
         batch.start(g);
         if (delay > 2) {
             map.render(paint_type, batch);
-            laboratory.render(paint_type, batch);
+            lab.render(paint_type, batch);
         }
         batch.setColor(Color.WHITE);
         long t = System.currentTimeMillis();
@@ -198,17 +204,24 @@ public class MainPanel extends Screen {
             long cycle = map.cycle;
             long cc = cycle - lastCycle;
             lastCycle = cycle;
-            speed = 1000 * cc / delta;
+            speed = Math.round(1000d * cc / delta);
         }
-        batch.drawStringOnScreen(5, 140, "Cycle: " + map.cycle);
         batch.drawStringOnScreen(5, 120, "Speed: " + speed);
+        batch.drawStringOnScreen(5, 140, "Cycle: " + map.cycle);
+        batch.drawStringOnScreen(5, 420, "Died seeds: " + map.died_seeds);
+        batch.drawStringOnScreen(5, 440, "Grown seeds: " + map.grown_seeds);
         int y0 = 600;
-        for (int i = 0; i < lab_genom.length; ++i) {
-            batch.drawStringOnScreen(5 + 70*i, y0, i + ":");
-            batch.drawStringOnScreen( 35 + 70*i, y0 - 15, "" + lab_genom[i][0]);
-            batch.drawStringOnScreen(45 + 70*i, y0, "" + lab_genom[i][1]);
-            batch.drawStringOnScreen(35 + 70*i, y0 + 15, "" + lab_genom[i][2]);
-            batch.drawStringOnScreen(25 + 70*i, y0, "" + lab_genom[i][3]);
-        }
+        if (paint_type == 1)
+            for (int i = 0, j = 0; j < lab_genom.length; ++i, ++j) {
+                if (i == 16) {
+                    i = 0;
+                    y0 += 45;
+                }
+                batch.drawStringOnScreen(5 + 70 * i, y0, j + ":");
+                batch.drawStringOnScreen(35 + 70 * i, y0 - 15, "" + lab_genom[j][0]);
+                batch.drawStringOnScreen(45 + 70 * i, y0, "" + lab_genom[j][1]);
+                batch.drawStringOnScreen(35 + 70 * i, y0 + 15, "" + lab_genom[j][2]);
+                batch.drawStringOnScreen(25 + 70 * i, y0, "" + lab_genom[j][3]);
+            }
     }
 }

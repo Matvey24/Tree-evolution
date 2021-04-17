@@ -45,7 +45,7 @@ public class CameraInputController extends MouseAdapter {
 
     @Override
     public void mouseDragged(MouseEvent e) {
-        if(e.getModifiersEx() != InputEvent.BUTTON3_DOWN_MASK)
+        if(e.getModifiersEx() != InputEvent.BUTTON1_DOWN_MASK)
             return;
         int dScreenX = px - e.getX();
         int dScreenY = py - e.getY();

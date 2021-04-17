@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+<comment>Settings are here</comment>
+<entry key="lab_height">100</entry>
+<entry key="max_age">100</entry>
+<entry key="lab_width">150</entry>
+<entry key="fight_mutation_chance">0</entry>
+<entry key="mutation_chance">0.25</entry>
+<entry key="map_height">100</entry>
+<entry key="gens">64</entry>
+<entry key="map_width">512</entry>
+<entry key="light_layers">3</entry>
+<entry key="fog">40</entry>
+</properties>

@@ -4,11 +4,12 @@ import java.awt.*;
 
 public class Batch {
     Graphics g;
-    float scale;
-    float x;
-    float y;
+    public float scale;
+    public float x;
+    public float y;
     private CameraInputController controller;
     private int HEIGHT;
+    private int d = 0;
     public Batch(MainPanel panel, int height){
         this.HEIGHT = height;
         controller = new CameraInputController(panel::repaint, ()->{
@@ -25,13 +26,18 @@ public class Batch {
         this.x = controller.getX();
         this.y = controller.getY();
         this.scale = controller.getScale();
+        if(scale < 5)
+            d = 0;
+        else{
+            d = 1;
+        }
     }
     public void drawColor(float x, float y, float x2, float y2){
         int dx = (int)((x-this.x) * scale);
-        int dy = (int)((this.y-y) * scale);
+        int dy = -(int)((y-this.y) * scale);
         int dw = (int)((x2-this.x) * scale);
-        int dh = (int)((this.y-y2) * scale);
-        g.fillRect(dx + 1, dy + HEIGHT, dw-dx - 1, dh-dy + 1);
+        int dh = -(int)((y2-this.y) * scale);
+        g.fillRect(dx + d, dy + HEIGHT, dw-dx - d, dh-dy + d);
     }
     public void drawLine(float x, float y, float x2, float y2){
         g.drawLine((int)((x-this.x)*scale), (int)((this.y-y)*scale)+HEIGHT,

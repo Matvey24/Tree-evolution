@@ -70,6 +70,16 @@ public class Tasks {
             }
         }
     }
+    public void join(){
+        disposeOnFinish();
+        if(workers.size() == 0)
+            return;
+        try {
+            workers.get(0).join();
+        }catch (InterruptedException e){
+            e.printStackTrace();
+        }
+    }
     public synchronized void clearTasks(){
         queue.clear();
     }
