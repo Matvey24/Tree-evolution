@@ -208,8 +208,8 @@ public class MainPanel extends Screen {
         }
         batch.drawStringOnScreen(5, 120, "Speed: " + speed);
         batch.drawStringOnScreen(5, 140, "Cycle: " + map.cycle);
-        batch.drawStringOnScreen(5, 420, "Died seeds: " + map.died_seeds);
-        batch.drawStringOnScreen(5, 440, "Grown seeds: " + map.grown_seeds);
+        batch.drawStringOnScreen(5, 380, "Died seeds: " + map.died_seeds);
+        batch.drawStringOnScreen(5, 400, "Grown seeds: " + map.grown_seeds);
         int y0 = 600;
         if (paint_type == 1)
             for (int i = 0, j = 0; j < lab_genom.length; ++i, ++j) {
